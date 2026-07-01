@@ -3,12 +3,14 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "北邮 byrdocs 资料/真题检索的 serverless MCP(Cloudflare Workers Paid)。暴露 search_documents / search_exam_questions / answer_guide 三个工具。",
+  "description": "北邮 byrdocs 资料/真题检索 MCP。暴露 search_documents / search_exam_questions / answer_guide。可跑 Cloudflare Workers 或 Node 自托管。",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "start:node": "tsx src/node/server.ts",
+    "dev:node": "tsx watch src/node/server.ts",
     "build-data": "node scripts/build-data.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "postinstall": "node scripts/copy-wasm.mjs",
     "predev": "node scripts/copy-wasm.mjs",
     "predeploy": "node scripts/copy-wasm.mjs"
@@ -18,10 +20,13 @@
     "agents": "^0.0.80",
     "jieba-wasm": "^2.4.0",
     "minisearch": "^7.1.2",
+    "nodejs-jieba": "^0.0.2",
+    "tsx": "^4.22.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250601.0",
+    "@types/node": "^26.1.0",
     "js-yaml": "^4.1.0",
     "typescript": "^5.8.3",
     "wrangler": "^4.20.0"

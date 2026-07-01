@@ -1,7 +1,7 @@
 // 检索工具的纯逻辑,移植自 superdocs-agent(去掉 Mastra 的 createTool 壳)。
 // v0.3:search_documents 补全字段 + 分页 + 归一;新增 search_exam_questions / answer_guide。
-import { getIndexes, buildInfo } from "./indexes";
-import type { DocRec, KBChunk } from "./indexes";
+import { getIndexes, getBuildInfo } from "./deps";
+import type { DocRec, KBChunk } from "./indexes-core";
 
 const SITE = "https://byrdocs.cloudlay.cn"; // 资料详情页 ?q=<md5>
 
@@ -163,7 +163,7 @@ export async function searchDocuments(args: SearchDocsArgs) {
   const lim = args.limit ?? 8;
   const top = records.slice(offset, offset + lim);
 
-  const snapshot_at = buildInfo.built_at || undefined;
+  const snapshot_at = getBuildInfo().built_at || undefined;
 
   const results = top.map((r) => {
     const d = r.data || {};
@@ -198,7 +198,7 @@ export async function searchDocuments(args: SearchDocsArgs) {
   });
 
   const ret: Record<string, any> = { total, count: results.length, offset, sort, results };
-  if (buildInfo.built_at) ret.note = `byrdocs 数据没有上传/提交时间;year 是学年(试卷)或出版年(教材),snapshot_at 是数据快照时间。`;
+  if (getBuildInfo().built_at) ret.note = `byrdocs 数据没有上传/提交时间;year 是学年(试卷)或出版年(教材),snapshot_at 是数据快照时间。`;
   if (results.length === 0 && total === 0) ret.suggestions = buildSuggestions(args, "doc");
   return ret;
 }
@@ -261,7 +261,7 @@ export async function searchExamQuestions(args: SearchExamArgs) {
 
   const k = args.limit ?? 5;
   const answerMode = args.answer_mode ?? "with_answer";
-  const snapshot_at = buildInfo.built_at || undefined;
+  const snapshot_at = getBuildInfo().built_at || undefined;
 
   const results = hits.slice(0, k).map((h) => {
     const c = kbById.get(h.id) as KBChunk;
@@ -347,7 +347,7 @@ export async function answerGuide(args: AnswerGuideArgs) {
   }
 
   const k = args.limit ?? 3;
-  const snapshot_at = buildInfo.built_at || undefined;
+  const snapshot_at = getBuildInfo().built_at || undefined;
 
   const results = hits.slice(0, k).map((h) => {
     const c = kbById.get(h.id) as KBChunk;

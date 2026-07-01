@@ -3,15 +3,13 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "WebWorker"],
-    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2022"],
+    "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "allowJs": true,
     "esModuleInterop": true,
     "noEmit": true
   },
-  "include": ["src", "scripts"],
-  "exclude": ["src/node"]
+  "include": ["src/node", "src/register-tools.ts", "src/tools.ts", "src/indexes-core.ts", "src/deps.ts"]
 }
