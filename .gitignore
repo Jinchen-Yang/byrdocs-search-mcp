@@ -5,3 +5,7 @@ node_modules/
 dist/
 *.log
 src/*.wasm
+
+# 内部计划/临时文件,勿入库
+linear-popping-snowflake.md
+*.plan.md
