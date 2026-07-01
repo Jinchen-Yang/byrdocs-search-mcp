@@ -1,9 +1,9 @@
 {
   "name": "byrdocs-search-mcp",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "北邮 byrdocs 资料/真题检索的 serverless MCP(Cloudflare Workers)。暴露 search_documents + answer_knowledge 两个工具。",
+  "description": "北邮 byrdocs 资料/真题检索的 serverless MCP(Cloudflare Workers Paid)。暴露 search_documents / search_exam_questions / answer_guide 三个工具。",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

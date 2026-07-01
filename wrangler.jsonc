@@ -10,6 +10,6 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ByrdocsSearchMCP"] }],
   "observability": { "enabled": true }
-  // 数据(data/*.json ~1.5MB)+ jieba wasm(~4MB)直接打进包:gzip 后约 ~2MB,免费版 3MB 上限内。
-  // 数据量再涨就改成放 R2 运行时拉(见 README)。
+  // gzip ≈3.5MB,超 Free 版 3MB,部署到 Paid(10MB)。数据量再涨考虑 R2。
+  // MCP_AUTH_TOKEN 可选鉴权:设了则 MCP 端点需 Bearer token,不设则公开。
 }
