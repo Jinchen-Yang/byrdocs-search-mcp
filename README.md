@@ -1,6 +1,3 @@
-以下是为您整理的简洁、严肃风格的 README 文档：
-
-
 # byrdocs-search-mcp
 
 北邮 **byrdocs 资料库 / 历年真题**检索能力的 Serverless MCP 实现。本项目将检索层从 [superdocs-agent](https://github.com/Jinchen-Yang/superdocs-agent) 中解耦，封装为标准 MCP 协议服务，部署于 Cloudflare Workers。支持 Claude Desktop、Cursor 等 AI 客户端直接调用，实现对北邮教材、试卷、课程资料及生存指南的结构化检索。
