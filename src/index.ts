@@ -89,7 +89,7 @@ export class ByrdocsSearchMCP extends McpAgent {
       {
         query: z.string().describe("用户问题或关键词,如 '沙河宿舍用电' / '怎么选课'"),
         campus: z.enum(["沙河", "海淀", "通用"]).optional().describe("校区筛选"),
-        topic: z.string().optional().describe("主题筛选,如 '宿舍'/'选课'/'校园网'"),
+        topic: z.string().optional().describe("主题(取指南文件名,如 '校园网'/'成绩构成'/'转专业'/'入学准备');细主题也可直接放进 query"),
         limit: z.number().int().min(1).max(5).optional().describe("返回条数,默认 3"),
       },
       async (args) => ({

@@ -63,6 +63,10 @@ function normalizeCourse(s: string): string {
   let n = s.replace(/（/g, "(").replace(/）/g, ")").replace(/\s+/g, "").trim();
   return COURSE_ALIAS[n] || n;
 }
+/** 匹配用归一(全角括号→半角、去空白)。记录侧也过一遍,避免全角/空格差异漏配。 */
+function normForMatch(s: string | undefined): string {
+  return String(s || "").replace(/（/g, "(").replace(/）/g, ")").replace(/\s+/g, "");
+}
 
 /** 从 query 中剥离纯意图词(仅独立短语,不碰内容词)。 */
 const INTENT_RE = /\b(最新|最近|推荐我?|帮我找|帮我搜|latest|recent|newest)\b/gi;
@@ -135,7 +139,7 @@ export async function searchDocuments(args: SearchDocsArgs) {
 
   // 过滤
   if (args.type) records = records.filter((r) => r.type === args.type);
-  if (courseNorm) records = records.filter((r) => courseName(r).includes(courseNorm));
+  if (courseNorm) records = records.filter((r) => normForMatch(courseName(r)).includes(courseNorm));
   if (args.stage) records = records.filter((r) => (r.data?.time?.stage || "") === args.stage);
   if (args.semester) records = records.filter((r) => (r.data?.time?.semester || "") === args.semester);
   if (args.content)
@@ -239,7 +243,7 @@ export async function searchExamQuestions(args: SearchExamArgs) {
   hits = hits.filter((h) => {
     const c = kbById.get(h.id) as KBChunk | undefined;
     if (!c) return false;
-    if (courseNorm && !(c.course || "").includes(courseNorm)) return false;
+    if (courseNorm && !normForMatch(c.course).includes(courseNorm)) return false;
     if (args.school_year && c.meta?.school_year !== args.school_year) return false;
     if (args.year != null) {
       const ys = Number(c.meta?.year_start || 0);
@@ -276,30 +280,25 @@ export async function searchExamQuestions(args: SearchExamArgs) {
       snapshot_at,
     };
 
-    // options:question_only 时不标正解
+    // options 本身不含正解标记(正解在 answer 字段),question_only 与否都可安全返回
     if (c.options && c.options.length > 0) {
-      if (answerMode === "question_only") {
-        ret.options = c.options.map((o) => ({ label: o.label, text: o.text }));
-      } else {
-        ret.options = c.options.map((o) => ({ label: o.label, text: o.text }));
-      }
+      ret.options = c.options.map((o) => ({ label: o.label, text: o.text }));
     }
 
+    // 答案暴露:question_only 全隐;with_answer 给 answer(freeform 无 answer 则回退给 solution);
+    // with_solution 都给。
     if (answerMode !== "question_only") {
       if (c.answer != null) ret.answer = c.answer;
-    }
-    if (answerMode === "with_solution") {
-      if (c.solution) ret.solution = c.solution;
+      const showSolution = answerMode === "with_solution" || c.answer == null;
+      if (showSolution && c.solution) ret.solution = c.solution;
     }
 
     // figures
-    if (c.figures && c.figures.length > 0) {
-      ret.figures = c.figures;
-    }
+    if (c.figures && c.figures.length > 0) ret.figures = c.figures;
 
-    // 含图题提示
-    if (c.has_figure && (!c.figures || c.figures.length === 0 || /【?图】?/.test(c.stem || ""))) {
-      ret.note = "此题依赖图片,请打开 url 查看";
+    // 题干明确引用图时提示打开 url(figures[].url 已给,但语义依赖图时更需要)
+    if (c.has_figure && /如图|图示|所示|如下图|见图|下图|图\s*\d/.test(c.stem || "")) {
+      ret.note = "此题依赖图片,建议打开 url 查看";
     }
 
     return ret;
@@ -388,7 +387,7 @@ export async function answerKnowledge(args: AnswerKnowledgeArgs) {
   if (args.kind) hits = hits.filter((h) => h.kind === args.kind);
 
   const courseNorm = args.course ? normalizeCourse(args.course) : undefined;
-  if (courseNorm) hits = hits.filter((h) => (h.course || "").includes(courseNorm));
+  if (courseNorm) hits = hits.filter((h) => normForMatch(h.course).includes(courseNorm));
 
   // 修复:用结构化字段做年份过滤(不再是 Number(meta.year) === args.year)
   if (args.year != null) {

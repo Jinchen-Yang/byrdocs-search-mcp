@@ -76,6 +76,7 @@ const stripMdxPreserve = (s) => s
   .replace(/<Figure[^>]*?src="([^"]+)"[^>]*>([\s\S]*?)<\/Figure>/g, "[图]")
   .replace(/<Figure[^>]*?src="([^"]+)"[^>]*\/>/g, "[图]")
   .replace(/<Figure[^>]*\/?>/g, "[图]")
+  .replace(/^#{1,6}\s+/gm, "") // 去 markdown 标题符(### 1. → 1.)
   .replace(TAG_RE, " ").replace(/\n{3,}/g, "\n\n").trim();
 
 // cleanMdx 用于整卷兜底和指南(不需要结构化字段)
@@ -109,8 +110,10 @@ function inferCampusTopic(relPath) {
   let campus = "通用";
   if (topDir === "沙河校区") campus = "沙河";
   else if (topDir === "海淀校区") campus = "海淀";
-  // topic 取顶层目录名,散文文件用文件名
-  const topic = topDir || relPath.replace(/\.mdx?$/, "");
+  // topic 取文件名(去扩展名)——比顶层目录细,能对上"校园网/成绩构成/转专业"等真实主题;
+  // index/根散文回退到目录名。
+  const fname = (parts[parts.length - 1] || "").replace(/\.mdx?$/, "");
+  const topic = (!fname || fname === "index") ? (parts.length > 1 ? parts[parts.length - 2] : "") : fname;
   return { campus, topic };
 }
 
@@ -200,6 +203,9 @@ function extractQuestion(qbody, qtype, figUrlFn) {
     stem = stripMdxPreserve(stem).slice(0, 1500);
   }
 
+  // 去掉题干开头重复的题号("1. xxx" → "xxx",题号已在 qno 字段)
+  stem = stem.replace(/^\s*\d+[.、]\s*/, "").trim();
+
   return { stem, options, answer, solution, has_figure, figures };
 }
 
@@ -240,29 +246,54 @@ function parseExam(dir, fm, body) {
     const headingMatch = part.match(/^##\s+(.+)/);
     const heading = headingMatch ? headingMatch[1].trim() : "";
     const sectionContent = part.replace(/^##\s+.+\r?\n?/, "");
+    if (sectionContent.trim().length < 15) continue;
     const qtype = heading ? inferQtype(heading) : "freeform";
     const sectionTitle = heading || "(无标题)";
+    const sectionSlug = sectionTitle.replace(/\s+/g, "-");
 
-    // 按题号切:^\d+\.  (注意不切（数字）子问)
-    const questionParts = sectionContent.split(/(?=^\s*\d+\.\s)/m);
-    const validQuestions = questionParts.filter(p => p.trim().length > 10);
+    // freeform(简答/计算/证明…):整节成一块。答案在 <Solution>/<Answer> 里,单独归入 solution,
+    // stem 只留题目——避免把答案块里的 1./2./3. 当成独立题(那正是重复 id + 答案泄漏的根)。
+    if (qtype === "freeform") {
+      const figures = extractFigures(sectionContent, figUrlFn);
+      const sols = [];
+      const solRe = /<(Solution|Answer)>([\s\S]*?)<\/\1>/g;
+      let sm;
+      while ((sm = solRe.exec(sectionContent)) !== null) {
+        const t = stripMdxPreserve(sm[2]);
+        if (t) sols.push(t);
+      }
+      const stem = stripMdxPreserve(
+        sectionContent.replace(/<(Solution|Answer)>[\s\S]*?<\/(Solution|Answer)>/g, ""),
+      ).slice(0, 3000);
+      if (stem.length < 5) continue;
+      chunks.push({
+        id: `neowiki:${dir}#${sectionSlug}`, source: "neowiki", kind: "exam", chunk: "section",
+        title: `${examTitle} · ${sectionTitle}`, course, url: wikiUrl,
+        section: sectionTitle, qtype: "freeform", has_figure: figures.length > 0, stem,
+        ...(sols.length ? { solution: sols.join("\n\n").slice(0, 4000) } : {}),
+        ...(figures.length ? { figures } : {}),
+        meta: examMeta,
+      });
+      continue;
+    }
+
+    // choice / blank:按题切。切分点只认「列首(第0列)」的 \d+.,躲开 <Solution> 里缩进的编号。
+    const questionParts = sectionContent.split(/(?=^\d+\.\s)/m);
+    const validQuestions = questionParts.filter((p) => p.trim().length > 10);
 
     if (validQuestions.length >= 1 && validQuestions.length <= 100) {
-      // 按题返回
-      let qno = 0;
       for (const qbody of validQuestions) {
-        const qnumMatch = qbody.match(/^\s*(\d+)\.\s/);
-        qno = qnumMatch ? parseInt(qnumMatch[1], 10) : qno + 1;
+        const qnumMatch = qbody.match(/^(\d+)\.\s/);
+        const qno = qnumMatch ? parseInt(qnumMatch[1], 10) : undefined;
         const extracted = extractQuestion(qbody, qtype, figUrlFn);
-        if (extracted.stem.length < 5) continue; // 太短的跳过
-        const chunkId = `neowiki:${dir}#${sectionTitle.replace(/\s+/g, "-")}-${qno}`;
-        const title = `${examTitle} · ${sectionTitle}第${qno}题`;
+        if (extracted.stem.length < 5) continue;
+        const suffix = qno != null ? String(qno) : `p${chunks.length}`;
         chunks.push({
-          id: chunkId, source: "neowiki", kind: "exam", chunk: "question",
-          title, course, url: wikiUrl,
+          id: `neowiki:${dir}#${sectionSlug}-${suffix}`, source: "neowiki", kind: "exam", chunk: "question",
+          title: `${examTitle} · ${sectionTitle}第${qno ?? ""}题`.replace(/第题/, "题"),
+          course, url: wikiUrl,
           section: sectionTitle, qno, qtype,
-          has_figure: extracted.has_figure,
-          stem: extracted.stem,
+          has_figure: extracted.has_figure, stem: extracted.stem,
           ...(extracted.options ? { options: extracted.options } : {}),
           ...(extracted.answer != null ? { answer: extracted.answer } : {}),
           ...(extracted.solution ? { solution: extracted.solution } : {}),
@@ -273,8 +304,7 @@ function parseExam(dir, fm, body) {
     } else if (sectionContent.trim().length > 30) {
       // 切不动:按节返回
       const cleanSection = stripMdxPreserve(sectionContent).slice(0, 4000);
-      chunks.push(makeChunk(`neowiki:${dir}#${sectionTitle.replace(/\s+/g, "-")}`,
-        "neowiki", "exam", "section",
+      chunks.push(makeChunk(`neowiki:${dir}#${sectionSlug}`, "neowiki", "exam", "section",
         `${examTitle} · ${sectionTitle}`, course, wikiUrl, cleanSection, examMeta,
         { section: sectionTitle, qtype }));
     }
@@ -337,6 +367,17 @@ for (const dir of readdirSync(EX)) {
   }
   chunks.push(...examChunks);
 }
+
+// --- id 唯一性兜底(minisearch addAll 遇重复 id 会抛,整个索引建不起来)---
+const idSeen = new Set();
+let idFixed = 0;
+for (const c of chunks) {
+  if (!idSeen.has(c.id)) { idSeen.add(c.id); continue; }
+  let i = 2, nid;
+  do { nid = `${c.id}~${i++}`; } while (idSeen.has(nid));
+  c.id = nid; idSeen.add(nid); idFixed++;
+}
+if (idFixed) console.warn(`  ⚠️ 修正了 ${idFixed} 个重复 chunk id(已加 ~N 后缀)`);
 
 // --- 输出 ---
 writeFileSync(join(DATA, "knowledge.json"), JSON.stringify(chunks));

@@ -1,1 +1,16 @@
-{"built_at":"","metadata_url":"","metadata_count":0,"knowledge_count":0,"sources":[]}
+{
+  "built_at": "2026-07-01T11:04:56.727Z",
+  "metadata_url": "https://byrdocs.cloudlay.cn/data/metadata.json",
+  "metadata_count": 1115,
+  "knowledge_count": 2486,
+  "sources": [
+    {
+      "repo": "byrdocs/bupt-survival-guide",
+      "commit": "9d88594ca119b865c1350c8bdc5ce5568110fc11"
+    },
+    {
+      "repo": "byrdocs/byrdocs-neowiki",
+      "commit": "8aa21cb39ec78b1d4ce69ef709868f3dc97a9669"
+    }
+  ]
+}
