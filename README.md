@@ -1,90 +1,94 @@
 # byrdocs-search-mcp
 
-北邮 **byrdocs 资料库 / 历年真题**检索能力的 Serverless MCP 实现。本项目将检索层从 [superdocs-agent](https://github.com/Jinchen-Yang/superdocs-agent) 中解耦，封装为标准 MCP 协议服务，部署于 Cloudflare Workers。支持 Claude Desktop、Cursor 等 AI 客户端直接调用，实现对北邮教材、试卷、课程资料及生存指南的结构化检索。
+北邮 [byrdocs](https://byrdocs.org) 资料库与历年真题的检索服务，以 [Model Context Protocol](https://modelcontextprotocol.io) 形式暴露，部署于 Cloudflare Workers。支持 MCP 的 AI 客户端接入后，即可检索教材、试卷、课程资料，以及新生生存指南与真题 wiki。
 
-## 核心功能
+数据来自 byrdocs 国内镜像及其开源内容仓库。本服务仅建立检索索引并返回必要摘录，不分发原文文件。
 
-| 工具 | 描述 |
-| :--- | :--- |
-| `search_documents` | 检索可下载的资料文件（教材/试卷/课件），返回元数据及下载链接 |
-| `search_exam_questions` | 按题/节/卷粒度检索真题正文，支持答案模式控制 |
-| `answer_guide` | 检索新生生存指南，返回经验正文及出处 |
-| `answer_knowledge` | ⚠️ **已弃用**。请迁移至 `search_exam_questions` 或 `answer_guide` |
+## 工具
 
-## 架构与数据
+| 工具 | 用途 |
+|---|---|
+| `search_documents` | 检索资料元信息（教材 / 试卷 / 课程资料），返回标题、课程、学年、文件类型、大小及下载链接 |
+| `search_exam_questions` | 检索真题，按题 / 节返回题干、选项、答案、解析；`answer_mode` 控制答案暴露程度 |
+| `answer_guide` | 检索生存指南，返回校园生活经验正文与出处，支持按校区 / 主题筛选 |
+| `answer_knowledge` | 已弃用，仅作兼容保留，请改用上述工具 |
 
-- **运行时**：Cloudflare Workers (Paid Plan) + Durable Objects (McpAgent)
-- **数据存储**：无外部数据库。所有数据在构建时生成 JSON 快照 (`data/*.json`) 并打包进 Worker
-- **检索引擎**：冷启动时基于 `minisearch` 内存建索引；中文分词采用 `jieba-wasm`
-- **数据来源**：
-  - 资料元数据：`byrdocs.cloudlay.cn` 公开接口
-  - 真题/指南内容：`byrdocs/bupt-survival-guide` & `byrdocs/byrdocs-neowiki` 源仓构建
+byrdocs 元数据不含上传时间；检索中的"学年"指试卷学年区间或教材出版年。查询关键词用于全文检索，筛选（类型、学年、阶段、学期等）请使用对应参数。
 
-> **注意**：byrdocs 数据无上传时间字段。获取最新试卷请使用 `sort="newest"` 参数，勿在 query 中包含"最新"等意图词。
+## 数据来源
 
-## 本地开发
+| 快照 | 内容 | 来源 |
+|---|---|---|
+| `data/metadata.json` | 资料元信息（教材 / 试卷 / 课程资料） | 镜像接口 `byrdocs.cloudlay.cn/data/metadata.json` |
+| `data/knowledge.json` | 真题按题 / 节切块，指南按节切块 | GitHub：`byrdocs/byrdocs-neowiki`、`byrdocs/bupt-survival-guide` |
+| `data/build-info.json` | 构建时间与源仓 commit | 构建时生成 |
 
-```bash
-npm install          # 安装依赖并自动复制 WASM 文件
-npm run dev          # 启动本地 Wrangler 开发服务器 (http://localhost:8787)
-npm run typecheck    # 类型检查
+数据在构建时抓取并打包进 Worker，随部署一同发布。
+
+## 架构
+
+```
+MCP 客户端 ──/mcp | /sse──▶ Cloudflare Worker（McpAgent / Durable Object）
+                              首次请求：jieba-wasm 分词 + MiniSearch 建索引（内存，isolate 内复用）
+                              数据：打包进 Worker 的 data/*.json
 ```
 
-## 部署
+- 无服务器，数据随代码部署，索引在运行时按需构建。
+- 中文分词使用 `jieba-wasm`（Workers 环境不支持原生实现）。
+- 包体 gzip 约 3.3 MB，需 Cloudflare Workers 付费方案（脚本上限 10 MB）。
+
+## 快速开始
+
+```bash
+npm install
+npm run dev          # 本地启动，默认 http://localhost:8787
+npm run typecheck
+```
+
+部署：
 
 ```bash
 npx wrangler login
 npm run deploy
 ```
 
-> ⚠️ **套餐要求**：构建产物 gzip 后约 3.5MB，超出 Free 版限制，**必须使用 Cloudflare Paid 计划** ($5/月)。
+## 接入
 
-### 鉴权配置
-
-通过 Wrangler Secrets 设置 `MCP_AUTH_TOKEN`：
-- 已设置：MCP 端点需携带 `Authorization: Bearer <token>`
-- 未设置：服务公开访问
-- `/health` 与 `/version` 端点始终免鉴权
-
-## 数据更新
-
-资料库或源仓变更后，需重新构建并部署：
-
-```bash
-npm run build-data   # 拉取最新 metadata + 重建 knowledge 索引
-npm run deploy       # 部署包含新数据的 Worker
-```
-
-## API 端点
-
-| 路径 | 方法 | 说明 |
-| :--- | :--- | :--- |
-| `/mcp` | POST | MCP Streamable HTTP 传输 |
-| `/sse` | GET | MCP SSE 传输 |
-| `/health` | GET | 健康检查（返回索引条数） |
-| `/version` | GET | 版本及构建信息 |
-
-## 客户端接入示例 (Claude Desktop)
+Claude Desktop（`claude_desktop_config.json`，经 `mcp-remote` 桥接）：
 
 ```jsonc
 {
   "mcpServers": {
     "byrdocs-search": {
       "command": "npx",
-      "args": ["mcp-remote", "https://.workers.dev/sse"]
+      "args": ["mcp-remote", "https://<your-worker>.workers.dev/sse"]
     }
   }
 }
 ```
 
-## 已知限制
+Cursor 等支持 HTTP MCP 的客户端可直接填写 `https://<your-worker>.workers.dev/mcp`。
 
-- 无内置速率限制，建议配合 Cloudflare WAF 使用
-- 数据更新依赖手动构建部署（计划接入 CI/CD）
-- 含图真题仅返回 URL 提示，暂不支持图片内容直出
-- 课程别名映射表有限，按需扩展 `COURSE_ALIAS`
+鉴权（可选）：设置环境变量 `MCP_AUTH_TOKEN`（`wrangler secret` 或 vars）后，`/mcp` 与 `/sse` 需携带 `Authorization: Bearer <token>`；`/health` 与 `/version` 不受限。
+
+## 端点
+
+| 路径 | 说明 |
+|---|---|
+| `POST /mcp` | MCP Streamable HTTP |
+| `GET /sse` | MCP SSE |
+| `GET /health` | 健康检查，返回索引条数 |
+| `GET /version` | 版本、构建时间、源仓 commit |
+
+## 数据更新
+
+```bash
+npm run build-data   # 重新抓取 metadata，并从 GitHub 源仓重建 knowledge
+npm run deploy
+```
+
+需可访问 GitHub。`build-data` 会将源仓更新至最新并记录 commit 至 `data/build-info.json`。
 
 ## 许可
 
-逻辑来自 superdocs-agent；真题及指南内容版权归 byrdocs 及各源仓库所有 (CC-BY-NC-SA 等)。本项目仅提供检索索引与必要摘录，不分发完整原始文件。
-```
+检索逻辑源自 [superdocs-agent](https://github.com/Jinchen-Yang/superdocs-agent)。真题与指南内容版权归 byrdocs 及各源仓库（CC-BY-NC-SA 等）。本项目仅建立检索索引并返回必要摘录，不分发完整原文文件。
