@@ -1,0 +1,29 @@
+{
+  "name": "byrdocs-search-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "北邮 byrdocs 资料/真题检索的 serverless MCP(Cloudflare Workers)。暴露 search_documents + answer_knowledge 两个工具。",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build-data": "node scripts/build-data.mjs",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/copy-wasm.mjs",
+    "predev": "node scripts/copy-wasm.mjs",
+    "predeploy": "node scripts/copy-wasm.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "agents": "^0.0.80",
+    "jieba-wasm": "^2.4.0",
+    "minisearch": "^7.1.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.20.0"
+  }
+}

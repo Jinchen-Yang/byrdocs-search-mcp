@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "byrdocs-search-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // MCP over Streamable HTTP / SSE 由 agents 的 McpAgent 提供,需要一个 Durable Object 承载会话。
+  "durable_objects": {
+    "bindings": [{ "name": "MCP_OBJECT", "class_name": "ByrdocsSearchMCP" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ByrdocsSearchMCP"] }],
+  "observability": { "enabled": true }
+  // 数据(data/*.json ~1.5MB)+ jieba wasm(~4MB)直接打进包:gzip 后约 ~2MB,免费版 3MB 上限内。
+  // 数据量再涨就改成放 R2 运行时拉(见 README)。
+}
